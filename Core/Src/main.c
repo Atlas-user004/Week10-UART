@@ -44,10 +44,22 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-char TxDataBuffer[32] =
-{ 0 };
-char RxDataBuffer[32] =
-{ 0 };
+char TxDataBuffer[32] = { 0 };
+char RxDataBuffer[32] = { 0 };
+
+char Input[1] = {0};
+
+uint8_t State = 0;
+enum STATEMACHINE
+{
+	StateMenu = 0,
+	StateMenu_WaitInput = 10,
+	StateLED = 20,
+	StateLED_WaitInput = 30,
+	StateButton = 40,
+	StateButton_WaitInput = 50
+};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,7 +107,7 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   {
-	  char temp[]="HELLO WORLD\r\n please type something to test UART\r\n";
+	  char temp[]="Welcome\r\nPlease type something to start UART.\r\n";
 	  HAL_UART_Transmit(&huart2, (uint8_t*)temp, strlen(temp),10);
   }
   /* USER CODE END 2 */
@@ -112,16 +124,115 @@ int main(void)
 		HAL_UART_Receive_IT(&huart2,  (uint8_t*)RxDataBuffer, 32);
 
 		/*Method 2 W/ 1 Char Received*/
-//		int16_t inputchar = UARTRecieveIT();
-//		if(inputchar!=-1)
-//		{
-
-//			sprintf(TxDataBuffer, "ReceivedChar:[%c]\r\n", inputchar);
-//			HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
-//		}
-
-
-
+		int16_t inputchar = UARTRecieveIT();
+		if(inputchar!=-1)
+		{
+			sprintf(TxDataBuffer, "ReceivedChar:[%c]\r\n", inputchar);
+			HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+		}
+		Input[1] = TxDataBuffer[14];
+		switch (State)
+		{
+			case StateMenu:
+				{
+					char MENU[] = "------------------------\r\nPress '0' for LED control.\r\nPress '1' for Button status.\r\n------------------------\r\n";
+					HAL_UART_Transmit(&huart2, (uint8_t*)MENU, strlen(MENU), 10);
+				}
+				State = StateMenu_WaitInput;
+				break;
+			case StateMenu_WaitInput:
+				switch (Input[1])
+				{
+					case 0: //No input. Wait for input
+						break;
+					case '0':
+						{
+							char GotoLED[] = " \r\nGo to LED control.\r\nPlease wait....\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)GotoLED, strlen(GotoLED), 10);
+						}
+						State = StateLED;
+					case '1':
+						{
+							char GotoButton[] = " \r\nGo to Button status.\r\nPlease wait....\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)GotoButton, strlen(GotoButton), 10);
+						}
+						State = StateButton;
+					default:
+						{
+							char ERROR[] = " \r\n!!!ERROR!!!\r\nPlease retype.\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)ERROR, strlen(ERROR), 10);
+						}
+						State = StateMenu_WaitInput;
+						break;
+				}
+				Input[1] = 0;
+				break;
+			case StateLED:
+				{
+					char LED[] = "------------------------\r\nLED control\r\n------------------------\r\n";
+					HAL_UART_Transmit(&huart2, (uint8_t*)LED, strlen(LED), 10);
+				}
+				State = StateLED_WaitInput;
+				break;
+			case StateLED_WaitInput:
+				switch (Input[1])
+				{
+					case 0: //No input. Wait for input
+						break;
+					case 'x':
+						{
+							char GoBack[] = " \r\nGo to Menu.\r\nPlease wait....\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)GoBack, strlen(GoBack), 10);
+						}
+						State = StateMenu;
+						break;
+					default:
+						{
+							char ERROR[] = " \r\n!!!ERROR!!!\r\nPlease retype.\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)ERROR, strlen(ERROR), 10);
+						}
+						State = StateLED_WaitInput;
+						break;
+				}
+				Input[1] = 0;
+				break;
+			case StateButton:
+				{
+					char Button[] = "------------------------\r\nButton status\r\n------------------------\r\n";
+					HAL_UART_Transmit(&huart2, (uint8_t*)Button, strlen(Button), 10);
+				}
+				State = StateButton_WaitInput;
+				break;
+			case StateButton_WaitInput:
+				switch (Input[1])
+				{
+					case 0: //No input. Wait for input
+						break;
+					case 'x':
+						{
+							char GoBack[] = " \r\nGo to Menu.\r\nPlease wait....\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)GoBack, strlen(GoBack), 10);
+						}
+						State = StateMenu;
+						break;
+					default:
+						{
+							char ERROR[] = " \r\n!!!ERROR!!!\r\nPlease retype.\r\n \r\n";
+							HAL_UART_Transmit(&huart2, (uint8_t*)ERROR, strlen(ERROR), 10);
+						}
+						State = StateButton_WaitInput;
+						break;
+				}
+				Input[1] = 0;
+				break;
+			default:
+				{
+					char ERROR[] = " \r\n!!!ERROR!!!\r\nPlease retype.\r\n \r\n";
+					HAL_UART_Transmit(&huart2, (uint8_t*)ERROR, strlen(ERROR), 10);
+				}
+				State = StateMenu;
+				break;
+		}
 		/*This section just simmulate Work Load*/
 		HAL_Delay(100);
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
