@@ -47,11 +47,19 @@ UART_HandleTypeDef huart2;
 char TxDataBuffer[32] = { 0 };
 char RxDataBuffer[32] = { 0 };
 
-uint8_t Input = 0;
-char Input_State[2] = {0};
-char LED_Status;
-char Button_Status;
+uint32_t TimeStamp = 0; //for blinking LED
+
 uint8_t TURN = 0;
+
+//text for operation
+char LED_Freq[32] = {0}; //Text that tell freq of LED
+char LED_Status[32] = {0}; //Text that tell you LED is On/Off
+char LED_Switch[5] = {0}; //memory On/Off
+uint16_t Freq = 1; // freq of LED
+
+char Button_Status[32] = {0}; //Text that tell status of button
+char Status[10] = {0}; //memory Press/Unpress
+uint8_t Status_state[2] = {1}; //memeory button state
 
 uint8_t State = 0;
 enum STATEMACHINE
@@ -111,13 +119,15 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   {
-	  char temp[]="Welcome\r\nPlease type something to start UART.\r\n";
+	  char temp[]="\r\n\r\n\r\n\r\n\r\nWelcome\r\nPlease type something to start UART.\r\n";
 	  HAL_UART_Transmit(&huart2, (uint8_t*)temp, strlen(temp),10);
   }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  sprintf(Status, "Unpress");
+  sprintf(LED_Switch, "Off.");
 	while (1)
 	{
 		/*Method 1 Polling Mode*/
@@ -131,15 +141,10 @@ int main(void)
 		int16_t inputchar = UARTRecieveIT();
 		if(inputchar!=-1)
 		{
-			sprintf(TxDataBuffer, "ReceivedChar:[%c]\r\n", inputchar);
+			sprintf(TxDataBuffer, "ReceivedChar:[%c]\r\n\r\n", inputchar);
 			HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
 		}
-//		Input = TxDataBuffer[14];
-//		Input_State[1] = TxDataBuffer[14];
-//		if(Input_State[0] != Input_State[1])
-//		{
-//			Input = Input_State[1];
-//		}
+		//State machine
 		switch (State)
 		{
 			case StateMenu:
@@ -165,7 +170,7 @@ int main(void)
 						break;
 					case '1':
 						{
-							char GotoButton[] = " \r\nGo to Button status.\r\nPlease wait....\r\n \r\n";
+							char GotoButton[] = " \r\nGo to Button status.\r\nPlease wait....\r\n";
 							HAL_UART_Transmit(&huart2, (uint8_t*)GotoButton, strlen(GotoButton), 100);
 						}
 						State = StateButton;
@@ -184,6 +189,12 @@ int main(void)
 					char LED[] = "------------------------\r\nLED control\r\n-->Press 'a' for speed LED up (+1 Hz).\r\n-->Press 's' for speed LED down (-1 Hz).\r\n-->Press 'd' for On/Off LED.\r\n-->Press 'x' for back to menu.\r\n------------------------\r\n";
 					HAL_UART_Transmit(&huart2, (uint8_t*)LED, strlen(LED), 100);
 				}
+				{
+					sprintf(LED_Status, "Status of LED:[%s]\r\n", LED_Switch);
+					HAL_UART_Transmit(&huart2, (uint8_t*)LED_Status, strlen(LED_Status), 100);
+					sprintf(LED_Freq, "Frequency of LED:[%d]\r\n", Freq);
+					HAL_UART_Transmit(&huart2, (uint8_t*)LED_Freq, strlen(LED_Freq), 100);
+				}
 				State = StateLED_WaitInput;
 				break;
 			case StateLED_WaitInput:
@@ -193,6 +204,34 @@ int main(void)
 						break;
 					case -1: //No input. Wait for input
 						break;
+					case 'a':
+						Freq += 1;
+						State = StateLED;
+						break;
+					case 's':
+						if(Freq > 1)
+						{
+							Freq -= 1;
+						}
+						else
+						{
+							Freq -= 0;
+						}
+						State = StateLED;
+						break;
+					case 'd':
+						if(TURN == 0)
+						{
+							TURN = 1;
+							sprintf(LED_Switch, "On.");
+						}
+						else if(TURN == 1)
+						{
+							TURN = 0;
+							sprintf(LED_Switch, "Off.");
+						}
+						State = StateLED;
+						break;
 					case 'x':
 						{
 							char GoBack[] = " \r\nGo to Menu.\r\nPlease wait....\r\n \r\n";
@@ -200,17 +239,7 @@ int main(void)
 						}
 						State = StateMenu;
 						break;
-					case 'd':
-						if(TURN == 0)
-						{
-							TURN = 1;
-						}
-						if(TURN == 1)
-						{
-							TURN = 0;
-						}
-						State = StateLED;
-						break;
+
 					default:
 						{
 							char ERROR[] = " \r\n!!!ERROR!!!\r\nPlease retype.\r\n \r\n";
@@ -222,17 +251,44 @@ int main(void)
 				break;
 			case StateButton:
 				{
-					char Button[] = "------------------------\r\nButton status\r\n-->Press 'x' for back to menu.\r\n------------------------\r\n";
+					char Button[] = "\r\n------------------------\r\nButton status\r\n-->Press 'x' for back to menu.\r\n------------------------\r\n";
 					HAL_UART_Transmit(&huart2, (uint8_t*)Button, strlen(Button), 100);
+					sprintf(Button_Status,"Status of Button:[%s]\r\n", Status);
+					HAL_UART_Transmit(&huart2, (uint8_t*)Button_Status, strlen(Button_Status), 100);
 				}
 				State = StateButton_WaitInput;
 				break;
 			case StateButton_WaitInput:
+				Status_state[1] = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
 				switch (inputchar)
 				{
 					case 0: //No input. Wait for input
+						if(Status_state[1] != Status_state[0])
+						{
+							if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 0)
+							{
+								sprintf(Status, "Press");
+							}
+							else
+							{
+								sprintf(Status, "Unpress");
+							}
+							State = StateButton;
+						}
 						break;
 					case -1: //No input. Wait for input
+						if(Status_state[1] != Status_state[0])
+						{
+							if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 0)
+							{
+								sprintf(Status, "Press");
+							}
+								else
+							{
+								sprintf(Status, "Unpress");
+							}
+							State = StateButton;
+						}
 						break;
 					case 'x':
 						{
@@ -249,6 +305,7 @@ int main(void)
 						State = StateButton;
 						break;
 				}
+				Status_state[0] = Status_state[1];
 				break;
 			default:
 				{
@@ -258,21 +315,18 @@ int main(void)
 				State = StateMenu;
 				break;
 		}
-//		Input = 0;
-//		Input_State[0] = Input_State[1];
-		/*This section just simmulate Work Load*/
-		HAL_Delay(100);
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-//		if(TURN == 1)
-//		{
-//			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
-//			HAL_Delay(100);
-//			HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-//		}
-//		else
-//		{
-//			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-//		}
+		if(TURN == 1)
+		{
+			if((HAL_GetTick() - TimeStamp) >= (500/Freq))
+			{
+				TimeStamp = HAL_GetTick();
+				HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+			}
+		}
+		else
+		{
+			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -417,9 +471,8 @@ int16_t UARTRecieveIT()
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	sprintf(TxDataBuffer, "Received:[%s]\r\n", RxDataBuffer);
+	sprintf(TxDataBuffer, "Received:[%s]\r\n\r\n", RxDataBuffer);
 	HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
-	//Input = RxDataBuffer[0];
 }
 /* USER CODE END 4 */
 
